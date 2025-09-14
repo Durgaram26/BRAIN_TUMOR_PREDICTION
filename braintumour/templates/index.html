@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brain Tumor Prediction</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            display: flex;
+            width: 80%;
+            height: 90vh;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .left-frame {
+            width: 50%;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-right: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .right-frame {
+            width: 50%;
+            padding: 20px;
+            background-color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #upload-box {
+            width: 80%;
+            height: 200px;
+            border: 2px dashed #888;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            color: #888;
+            cursor: pointer;
+        }
+
+        #uploaded-image, #result-image {
+            max-width: 80%;
+            max-height: 80%;
+            margin-top: 10px;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .buttons button {
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        label {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        .slider-value {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Left Frame -->
+        <div class="left-frame">
+            <form id="upload-form">
+                <div id="upload-box" onclick="document.getElementById('file').click();" 
+                     ondragover="handleDragOver(event)" ondrop="handleDrop(event)">
+                    Drag and drop or click to upload image
+                </div>
+                <input type="file" id="file" name="file" accept="image/*" style="display: none;" onchange="showImagePreview(event)">
+                <img id="uploaded-image" src="#" alt="Uploaded Image Preview" style="display: none;">
+
+                <label for="confidence">Confidence Threshold:</label>
+                <input type="range" id="confidence" name="confidence" min="0" max="1" step="0.01" value="0.5" onchange="updateSliderValue(); predict();">
+                <div class="slider-value">
+                    Confidence Threshold: <span id="confidence-value">0.50</span>
+                </div>
+
+                <div class="buttons">
+                    <button type="button" onclick="predict()">Predict</button>
+                    <button type="button" onclick="resetForm()">Reset</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Right Frame -->
+        <div class="right-frame">
+            <h3>Prediction Result:</h3>
+            <p id="prediction-text">No prediction yet</p>
+            <img id="result-image" src="#" alt="Predicted Image" style="display: none;">
+        </div>
+    </div>
+
+    <script>
+        // Prevent default behavior for drag and drop events
+        function handleDragOver(event) {
+            event.preventDefault();  // Prevent the image from opening in a new tab
+            document.getElementById('upload-box').style.border = '2px solid #555'; // Optional: highlight drop area
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();  // Prevent the image from opening in a new tab
+            document.getElementById('upload-box').style.border = '2px dashed #888';  // Reset border style
+
+            const file = event.dataTransfer.files[0]; // Get the dropped file
+            if (file && file.type.startsWith('image/')) {
+                // If the file is an image, show it in the preview
+                const fileInput = document.getElementById('file');
+                fileInput.files = event.dataTransfer.files; // Set file input's file list
+                showImagePreview(event);  // Call function to show the image preview
+                predict();  // Trigger prediction automatically after image is uploaded
+            } else {
+                alert('Please drop an image file.');
+            }
+        }
+
+        // Show image preview in the left frame
+        function showImagePreview(event) {
+            const reader = new FileReader();
+            reader.onload = function() {
+                const uploadedImage = document.getElementById('uploaded-image');
+                uploadedImage.src = reader.result;
+                uploadedImage.style.display = 'block';
+                // Hide the upload area after image is uploaded
+                document.getElementById('upload-box').style.display = 'none';
+            }
+            reader.readAsDataURL(event.target.files[0]);
+        }
+
+        // Update the displayed confidence value
+        function updateSliderValue() {
+            const slider = document.getElementById('confidence');
+            const value = slider.value;
+            document.getElementById('confidence-value').innerText = value;
+        }
+
+        // Reset the form and clear uploaded image and result
+        function resetForm() {
+            document.getElementById('upload-form').reset();
+            document.getElementById('uploaded-image').style.display = 'none';
+            document.getElementById('result-image').style.display = 'none';
+            document.getElementById('prediction-text').innerText = "No prediction yet";
+            // Show the upload area again after reset
+            document.getElementById('upload-box').style.display = 'flex';
+        }
+
+        // Send the prediction request to the server
+        async function predict() {
+            const fileInput = document.getElementById('file');
+            const confidenceInput = document.getElementById('confidence').value;
+
+            if (fileInput.files.length === 0) {
+                alert("Please upload an image.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('confidence', confidenceInput);
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('prediction-text').innerText = data.prediction;
+                    const resultImage = document.getElementById('result-image');
+                    resultImage.src = data.result_image_url;
+                    resultImage.style.display = 'block';
+                } else {
+                    alert("Prediction failed. Please try again.");
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                alert("An error occurred. Please try again.");
+            }
+        }
+    </script>
+</body>
+</html>
